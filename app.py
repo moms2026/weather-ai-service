@@ -4,7 +4,6 @@ import numpy as np
 import joblib
 import urllib.request
 import json
-from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app)
@@ -18,8 +17,12 @@ CLASSES = {0: 'Mauvais', 1: 'Moyen', 2: 'Bon'}
 LEDS    = {0: 'Rouge 🔴', 1: 'Bleue 🔵', 2: 'Verte 🟢'}
 EMOJIS  = {0: '⛈️', 1: '🌥️', 2: '☀️'}
 
-def get_forecast(lat=48.8566, lon=2.3522):
-    """Récupère les vraies prévisions Open-Meteo pour aujourd'hui + 2 jours"""
+# ── Position fixe ───────────────────────────────────────────
+LAT  = 45.6442
+LON  = 5.8728
+CITY = "Le Bourget-du-Lac, FR"
+
+def get_forecast(lat, lon):
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
@@ -34,9 +37,9 @@ def get_forecast(lat=48.8566, lon=2.3522):
         results = []
         for i in range(3):
             tavg = (daily['temperature_2m_max'][i] + daily['temperature_2m_min'][i]) / 2
-            pres = daily['surface_pressure_mean'][i]
-            wspd = daily['wind_speed_10m_max'][i]
-            prcp = daily['precipitation_sum'][i]
+            pres = daily['surface_pressure_mean'][i] or 1013.0
+            wspd = daily['wind_speed_10m_max'][i]    or 0.0
+            prcp = daily['precipitation_sum'][i]     or 0.0
             X  = np.array([[tavg, pres, wspd, prcp]])
             Xs = scaler.transform(X)
             proba = model.predict_proba(Xs)[0]
@@ -56,6 +59,7 @@ def get_forecast(lat=48.8566, lon=2.3522):
             })
         return results
     except Exception as e:
+        print(f"Erreur forecast : {e}")
         return None
 
 PAGE = """
@@ -67,56 +71,133 @@ PAGE = """
   <title>Météo IA — STM32</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 2rem 1rem; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
     .container { max-width: 500px; margin: 0 auto; }
     h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.3rem; }
     .sub { color: #94a3b8; font-size: 0.85rem; margin-bottom: 2rem; }
 
-    /* Carte simulation manuelle */
-    .card { background: #1e293b; border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
-    .card h2 { font-size: 1rem; color: #94a3b8; margin-bottom: 1.2rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.4rem; margin-top: 1rem; }
-    input[type=range] { width: 100%; accent-color: #6366f1; }
-    .val { font-size: 1.2rem; font-weight: 700; color: #818cf8; margin-left: 0.5rem; }
-    button { margin-top: 1.5rem; width: 100%; padding: 0.9rem; background: #6366f1; color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #4f46e5; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .card {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+    }
+    .card-title {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 1rem;
+    }
 
-    /* Résultat simulation */
-    .result { margin-top: 1.2rem; padding: 1.2rem; border-radius: 10px; text-align: center; display: none; }
+    /* Header prévisions */
+    .forecast-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.2rem;
+    }
+    .city-name   { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; }
+    .city-sub    { font-size: 0.72rem; color: #475569; margin-top: 0.2rem; }
+    .refresh-btn {
+      background: transparent;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .refresh-btn:hover { border-color: #6366f1; color: #818cf8; }
+
+    /* Grille prévisions */
+    .forecast-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8rem;
+    }
+    .fcard {
+      background: #0f172a;
+      border-radius: 10px;
+      padding: 0.9rem 0.6rem;
+      text-align: center;
+      border: 1px solid #334155;
+      transition: transform 0.2s;
+    }
+    .fcard:hover { transform: translateY(-2px); }
+    .fcard.today { border-color: #6366f1; }
+    .fday   { font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 0.1rem; }
+    .fdate  { font-size: 0.65rem; color: #475569; margin-bottom: 0.4rem; }
+    .femoji { font-size: 1.9rem; margin: 0.3rem 0; }
+    .fnom   { font-size: 0.82rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .ftemp  { font-size: 0.75rem; color: #94a3b8; }
+    .fwind  { font-size: 0.68rem; color: #64748b; margin-top: 0.2rem; }
+    .fconf  { font-size: 0.65rem; color: #475569; margin-top: 0.4rem; }
+    .bad-fc  { border-color: #ef444466 !important; background: #1c0606 !important; }
+    .mid-fc  { border-color: #6366f166 !important; background: #0d0f1e !important; }
+    .good-fc { border-color: #22c55e66 !important; background: #031209 !important; }
+
+    /* Sliders */
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-top: 1.1rem; margin-bottom: 0.3rem; }
+    input[type=range] { width: 100%; accent-color: #6366f1; cursor: pointer; }
+    .val { font-size: 1.1rem; font-weight: 700; color: #818cf8; margin-left: 0.4rem; }
+
+    /* Bouton prédire */
+    .predict-btn {
+      margin-top: 1.5rem;
+      width: 100%;
+      padding: 0.9rem;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .predict-btn:hover    { background: #4f46e5; }
+    .predict-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Résultat */
+    .result {
+      margin-top: 1.2rem;
+      padding: 1.2rem;
+      border-radius: 10px;
+      text-align: center;
+      display: none;
+    }
     .result.show { display: block; }
     .result.bad  { background: #450a0a; border: 1px solid #ef4444; }
     .result.mid  { background: #1e1b4b; border: 1px solid #6366f1; }
     .result.good { background: #052e16; border: 1px solid #22c55e; }
-    .result .emoji { font-size: 2.5rem; }
-    .result .rlabel { font-size: 1.2rem; font-weight: 700; margin: 0.4rem 0; }
-    .result .conf   { font-size: 0.85rem; color: #94a3b8; }
-    .led-row { display: flex; gap: 0.6rem; justify-content: center; margin-top: 0.8rem; }
-    .led { width: 16px; height: 16px; border-radius: 50%; opacity: 0.2; transition: all 0.3s; }
-    .led.on { opacity: 1; }
-    .led.red   { background: #ef4444; box-shadow: 0 0 12px #ef4444; }
-    .led.blue  { background: #6366f1; box-shadow: 0 0 12px #6366f1; }
-    .led.green { background: #22c55e; box-shadow: 0 0 12px #22c55e; }
+    .remoji { font-size: 2.5rem; }
+    .rlabel { font-size: 1.1rem; font-weight: 700; margin: 0.5rem 0 0.2rem; }
+    .rconf  { font-size: 0.82rem; color: #94a3b8; }
 
-    /* Prévisions */
-    .forecast-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
-    .fcard { background: #1e293b; border-radius: 12px; padding: 1rem; text-align: center; border: 1px solid #334155; }
-    .fcard.today { border-color: #6366f1; }
-    .fcard .fday  { font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.4rem; text-transform: uppercase; }
-    .fcard .femoji { font-size: 2rem; margin: 0.4rem 0; }
-    .fcard .fnom  { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
-    .fcard .ftemp { font-size: 0.8rem; color: #94a3b8; }
-    .fcard .fconf { font-size: 0.7rem; color: #475569; margin-top: 0.3rem; }
-    .fcard .fwind { font-size: 0.7rem; color: #64748b; }
-    .bad-fc  { border-color: #ef444488 !important; }
-    .mid-fc  { border-color: #6366f188 !important; }
-    .good-fc { border-color: #22c55e88 !important; }
+    /* LEDs */
+    .led-row { display: flex; gap: 0.6rem; justify-content: center; margin-top: 0.9rem; }
+    .led {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      opacity: 0.15;
+      transition: all 0.3s;
+    }
+    .led.on     { opacity: 1; }
+    .led.red    { background: #ef4444; box-shadow: 0 0 14px #ef4444; }
+    .led.blue   { background: #6366f1; box-shadow: 0 0 14px #6366f1; }
+    .led.green  { background: #22c55e; box-shadow: 0 0 14px #22c55e; }
 
-    .loading { text-align: center; color: #64748b; padding: 2rem; font-size: 0.9rem; }
-    .error-msg { color: #ef4444; text-align: center; font-size: 0.85rem; padding: 1rem; }
-    .refresh-btn { background: transparent; border: 1px solid #334155; color: #94a3b8; font-size: 0.8rem; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; margin-top: 0.8rem; width: auto; }
-    .refresh-btn:hover { border-color: #6366f1; color: #818cf8; }
-    .forecast-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .loading   { text-align: center; color: #64748b; padding: 2rem; font-size: 0.88rem; }
+    .error-msg { color: #ef4444; text-align: center; font-size: 0.82rem; padding: 1rem; }
   </style>
 </head>
 <body>
@@ -127,25 +208,30 @@ PAGE = """
   <!-- PRÉVISIONS RÉELLES -->
   <div class="card">
     <div class="forecast-header">
-      <h2>📡 Prévisions réelles (Paris)</h2>
+      <div>
+        <div class="city-name">📍 Le Bourget-du-Lac, FR</div>
+        <div class="city-sub">Lac du Bourget · Savoie (73)</div>
+      </div>
       <button class="refresh-btn" onclick="loadForecast()">🔄 Actualiser</button>
     </div>
-    <div id="forecast"><div class="loading">⏳ Chargement des prévisions...</div></div>
+    <div id="forecast">
+      <div class="loading">⏳ Chargement des prévisions...</div>
+    </div>
   </div>
 
   <!-- SIMULATION MANUELLE -->
   <div class="card">
-    <h2>🎛️ Simulation manuelle capteurs</h2>
+    <div class="card-title">🎛️ Simulation manuelle capteurs</div>
 
     <label>🌡️ Température <span class="val" id="vTemp">20°C</span></label>
     <input type="range" id="temp" min="-10" max="45" value="20"
            oninput="document.getElementById('vTemp').textContent=this.value+'°C'">
 
-    <label>🔵 Pression <span class="val" id="vPres">1013 hPa</span></label>
+    <label>🔵 Pression atmosphérique <span class="val" id="vPres">1013 hPa</span></label>
     <input type="range" id="pres" min="970" max="1050" value="1013"
            oninput="document.getElementById('vPres').textContent=this.value+' hPa'">
 
-    <label>💨 Vent <span class="val" id="vWind">10 km/h</span></label>
+    <label>💨 Vent estimé <span class="val" id="vWind">10 km/h</span></label>
     <input type="range" id="wind" min="0" max="80" value="10"
            oninput="document.getElementById('vWind').textContent=this.value+' km/h'">
 
@@ -153,12 +239,12 @@ PAGE = """
     <input type="range" id="rain" min="0" max="30" value="0"
            oninput="document.getElementById('vRain').textContent=this.value+' mm'">
 
-    <button onclick="predict()">⚡ Prédire le temps</button>
+    <button class="predict-btn" onclick="predict()">⚡ Prédire le temps</button>
 
     <div class="result" id="result">
-      <div class="emoji" id="rEmoji"></div>
+      <div class="remoji" id="rEmoji"></div>
       <div class="rlabel" id="rLabel"></div>
-      <div class="conf"   id="rConf"></div>
+      <div class="rconf"  id="rConf"></div>
       <div class="led-row">
         <div class="led red"   id="ledR"></div>
         <div class="led blue"  id="ledB"></div>
@@ -169,48 +255,56 @@ PAGE = """
 </div>
 
 <script>
-// ── Prévisions réelles ──────────────────────────────────────
+// ── Prévisions ───────────────────────────────────────────────
 async function loadForecast() {
   document.getElementById('forecast').innerHTML =
-    '<div class="loading">⏳ Chargement des prévisions...</div>';
-  try {
-    const res  = await fetch('/forecast');
-    const days = await res.json();
-    if (days.error) throw new Error(days.error);
+    '<div class="loading">⏳ Chargement...</div>';
 
-    const labels = ['Aujourd\\'hui', 'Demain', 'Après-demain'];
-    const themes = {0:'bad-fc', 1:'mid-fc', 2:'good-fc'};
+  try {
+    const res  = await fetch('/forecast?_t=' + Date.now());
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+
+    const days   = json.days;
+    const labels = ["Aujourd'hui", 'Demain', 'Après-demain'];
+    const themes = {0: 'bad-fc', 1: 'mid-fc', 2: 'good-fc'};
 
     let html = '<div class="forecast-grid">';
     days.forEach((d, i) => {
       const todayClass = i === 0 ? 'today' : '';
+      const dateObj = new Date(d.date + 'T12:00:00');
+      const dateStr = dateObj.toLocaleDateString('fr-FR',
+        { weekday: 'short', day: 'numeric', month: 'short' });
       html += `
         <div class="fcard ${todayClass} ${themes[d.prediction]}">
           <div class="fday">${labels[i]}</div>
+          <div class="fdate">${dateStr}</div>
           <div class="femoji">${d.emoji}</div>
           <div class="fnom">${d.nom}</div>
           <div class="ftemp">🌡️ ${d.temp_min}° / ${d.temp_max}°C</div>
-          <div class="fwind">💨 ${d.wspd} km/h · 🌧️ ${d.prcp}mm</div>
-          <div class="fconf">Confiance ${Math.round(d.confiance*100)}%</div>
+          <div class="fwind">💨 ${d.wspd} km/h &nbsp;🌧️ ${d.prcp} mm</div>
+          <div class="fconf">Confiance ${Math.round(d.confiance * 100)}%</div>
         </div>`;
     });
     html += '</div>';
     document.getElementById('forecast').innerHTML = html;
+
   } catch(e) {
     document.getElementById('forecast').innerHTML =
-      `<div class="error-msg">❌ Impossible de charger les prévisions<br><small>${e.message}</small></div>`;
+      `<div class="error-msg">❌ Erreur : ${e.message}</div>`;
   }
 }
 
-// ── Simulation manuelle ─────────────────────────────────────
+// ── Simulation manuelle ──────────────────────────────────────
 async function predict() {
-  const btn = document.querySelector('.card:last-child button');
+  const btn = document.querySelector('.predict-btn');
   btn.textContent = '⏳ Analyse...';
   btn.disabled = true;
+
   try {
     const res  = await fetch('/predict', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         temp: document.getElementById('temp').value,
         pres: document.getElementById('pres').value,
@@ -219,21 +313,28 @@ async function predict() {
       })
     });
     const data = await res.json();
-    const themes = {0:'bad', 1:'mid', 2:'good'};
+    const themes = {0: 'bad', 1: 'mid', 2: 'good'};
+
     document.getElementById('rEmoji').textContent = data.emoji;
     document.getElementById('rLabel').textContent = data.nom + ' — ' + data.led;
-    document.getElementById('rConf').textContent  = 'Confiance : ' + Math.round(data.confiance*100) + '%';
+    document.getElementById('rConf').textContent  =
+      'Confiance : ' + Math.round(data.confiance * 100) + '%';
+
     const r = document.getElementById('result');
     r.className = 'result show ' + themes[data.prediction];
+
     document.getElementById('ledR').classList.toggle('on', data.prediction === 0);
     document.getElementById('ledB').classList.toggle('on', data.prediction === 1);
     document.getElementById('ledG').classList.toggle('on', data.prediction === 2);
-  } catch(e) { alert('Erreur : ' + e.message); }
+  } catch(e) {
+    alert('Erreur : ' + e.message);
+  }
+
   btn.textContent = '⚡ Prédire le temps';
   btn.disabled = false;
 }
 
-// Charger les prévisions au démarrage
+// Démarrage
 loadForecast();
 </script>
 </body>
@@ -246,10 +347,13 @@ def home():
 
 @app.route('/forecast')
 def forecast():
-    data = get_forecast()
+    data = get_forecast(LAT, LON)
     if data is None:
         return jsonify({'error': 'API météo indisponible'}), 503
-    return jsonify(data)
+    response = jsonify({'city': CITY, 'days': data})
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -258,10 +362,12 @@ def predict():
     pres = float(data.get('pres', 1013))
     wind = float(data.get('wind', 0))
     rain = float(data.get('rain', 0))
+
     X  = np.array([[temp, pres, wind, rain]])
     Xs = scaler.transform(X)
     proba = model.predict_proba(Xs)[0]
     pred  = int(np.argmax(proba))
+
     return jsonify({
         'prediction': pred,
         'nom':        CLASSES[pred],
