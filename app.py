@@ -189,22 +189,6 @@ PAGE = """
     .badge-good { background: #22c55e22; color: #22c55e; }
     .widget-footer { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 2rem; border-top: 1px solid #1e293b; }
     .widget-source { font-size: 0.68rem; color: #475569; }
-
-    /* ── Simulation manuelle ── */
-    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-top: 1.1rem; margin-bottom: 0.3rem; }
-    input[type=range] { width: 100%; accent-color: #6366f1; cursor: pointer; }
-    .val { font-size: 1.1rem; font-weight: 700; color: #818cf8; margin-left: 0.4rem; }
-    .predict-btn { margin-top: 1.5rem; width: 100%; padding: 0.9rem; background: #6366f1; color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    .predict-btn:hover { background: #4f46e5; }
-    .predict-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .result { margin-top: 1.2rem; padding: 1.2rem; border-radius: 10px; text-align: center; display: none; }
-    .result.show { display: block; }
-    .result.bad  { background: #450a0a; border: 1px solid #ef4444; }
-    .result.mid  { background: #1e1b4b; border: 1px solid #6366f1; }
-    .result.good { background: #052e16; border: 1px solid #22c55e; }
-    .remoji { font-size: 2.5rem; }
-    .rlabel { font-size: 1.1rem; font-weight: 700; margin: 0.5rem 0 0.2rem; }
-    .rconf  { font-size: 0.82rem; color: #94a3b8; }
     .loading   { text-align: center; color: #64748b; padding: 2rem; font-size: 0.88rem; }
     .error-msg { color: #ef4444; font-size: 0.82rem; padding: 0.5rem; text-align: center; }
   </style>
@@ -214,7 +198,6 @@ PAGE = """
   <h1>🌤️ Météo IA</h1>
   <p class="sub">Système embarqué STM32 — NUCLEO-N657X0-Q</p>
 
-  <!-- ── CAPTEURS LIVE STM32 ── -->
   <div class="card">
     <div class="live-header">
       <div>
@@ -226,37 +209,8 @@ PAGE = """
     <div id="liveContent"><div class="loading">⏳ Lecture des capteurs...</div></div>
   </div>
 
-  <!-- ── WIDGET MÉTÉO ── -->
   <div class="weather-widget" id="weatherWidget">
     <div class="loading" style="padding:3rem">⏳ Chargement météo...</div>
-  </div>
-
-  <!-- ── SIMULATION MANUELLE ── -->
-  <div class="card">
-    <div class="card-title">🎛️ Simulation manuelle capteurs</div>
-    <label>🌡️ Température <span class="val" id="vTemp">20°C</span></label>
-    <input type="range" id="temp" min="-10" max="45" value="20"
-           oninput="document.getElementById('vTemp').textContent=this.value+'°C'">
-    <label>🔵 Pression <span class="val" id="vPres">1013 hPa</span></label>
-    <input type="range" id="pres" min="970" max="1050" value="1013"
-           oninput="document.getElementById('vPres').textContent=this.value+' hPa'">
-    <label>💨 Vent estimé <span class="val" id="vWind">10 km/h</span></label>
-    <input type="range" id="wind" min="0" max="80" value="10"
-           oninput="document.getElementById('vWind').textContent=this.value+' km/h'">
-    <label>🌧️ Précipitations <span class="val" id="vRain">0 mm</span></label>
-    <input type="range" id="rain" min="0" max="30" value="0"
-           oninput="document.getElementById('vRain').textContent=this.value+' mm'">
-    <button class="predict-btn" onclick="predict()">⚡ Prédire le temps</button>
-    <div class="result" id="result">
-      <div class="remoji" id="rEmoji"></div>
-      <div class="rlabel" id="rLabel"></div>
-      <div class="rconf"  id="rConf"></div>
-      <div class="led-row">
-        <div class="led red"   id="ledR"></div>
-        <div class="led blue"  id="ledB"></div>
-        <div class="led green" id="ledG"></div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -446,34 +400,6 @@ async function loadForecast() {
     document.getElementById('weatherWidget').innerHTML =
       `<div class="error-msg" style="padding:2rem">❌ ${e.message}</div>`;
   }
-}
-
-// ── Simulation manuelle ──────────────────────────────────────
-async function predict() {
-  const btn = document.querySelector('.predict-btn');
-  btn.textContent = '⏳ Analyse...'; btn.disabled = true;
-  try {
-    const res = await fetch('/predict', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        temp: document.getElementById('temp').value,
-        pres: document.getElementById('pres').value,
-        wind: document.getElementById('wind').value,
-        rain: document.getElementById('rain').value
-      })
-    });
-    const data = await res.json();
-    const themes = {0:'bad', 1:'mid', 2:'good'};
-    document.getElementById('rEmoji').textContent = data.emoji;
-    document.getElementById('rLabel').textContent = data.nom + ' — ' + data.led;
-    document.getElementById('rConf').textContent  = 'Confiance : ' + Math.round(data.confiance*100) + '%';
-    const r = document.getElementById('result');
-    r.className = 'result show ' + themes[data.prediction];
-    document.getElementById('ledR').classList.toggle('on', data.prediction===0);
-    document.getElementById('ledB').classList.toggle('on', data.prediction===1);
-    document.getElementById('ledG').classList.toggle('on', data.prediction===2);
-  } catch(e) { alert('Erreur : ' + e.message); }
-  btn.textContent = '⚡ Prédire le temps'; btn.disabled = false;
 }
 
 // Démarrage
