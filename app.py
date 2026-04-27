@@ -111,88 +111,74 @@ PAGE = """
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Dashboard STM32 + IA</title>
+<title>STM32 + IA</title>
 
 <style>
-
 body {
-  margin:0;
-  font-family: 'Segoe UI';
-  background: linear-gradient(135deg,#0f172a,#020617);
-  color:white;
+    margin:0;
+    font-family: 'Segoe UI';
+    background:#0f172a;
+    color:white;
 }
 
 .main {
-  display:grid;
-  grid-template-columns: 350px 1fr;
-  gap:20px;
-  padding:20px;
+    display:flex;
+    gap:20px;
+    padding:20px;
 }
 
-/* LEFT */
+/* LEFT PANEL */
 .left {
-  background:#1e293b;
-  border-radius:20px;
-  padding:20px;
+    width:30%;
+    background:#1e293b;
+    border-radius:20px;
+    padding:20px;
 }
 
-/* RIGHT */
-.right {
-  background:#1e293b;
-  border-radius:20px;
-  padding:25px;
-}
-
-/* STM32 */
 .sensor {
-  background:#0f172a;
-  padding:15px;
-  border-radius:12px;
-  margin-bottom:15px;
+    background:#0f172a;
+    padding:15px;
+    border-radius:12px;
+    margin-bottom:15px;
+}
+
+.sensor h3 {
+    margin:0;
+    font-size:14px;
+    color:#94a3b8;
+}
+
+.sensor p {
+    font-size:22px;
+    font-weight:bold;
+}
+
+/* RIGHT PANEL */
+.right {
+    width:70%;
+    background:#1e293b;
+    border-radius:20px;
+    padding:20px;
 }
 
 .big {
-  font-size:28px;
-  font-weight:bold;
-}
-
-/* WEATHER */
-.top {
-  display:flex;
-  justify-content:space-between;
-}
-
-.temp {
-  font-size:70px;
-  font-weight:300;
-}
-
-.desc {
-  color:#94a3b8;
+    font-size:60px;
+    font-weight:300;
 }
 
 .days {
-  display:flex;
-  margin-top:30px;
-  gap:10px;
+    display:flex;
+    justify-content:space-between;
+    margin-top:20px;
 }
 
 .day {
-  flex:1;
-  background:#0f172a;
-  padding:10px;
-  border-radius:12px;
-  text-align:center;
+    background:#0f172a;
+    padding:15px;
+    border-radius:12px;
+    text-align:center;
+    width:30%;
 }
-
-.day:hover {
-  background:#1e293b;
-}
-
-.chart {
-  margin-top:20px;
-}
-
 </style>
 </head>
 
@@ -200,121 +186,94 @@ body {
 
 <div class="main">
 
-<!-- STM32 -->
+<!-- LEFT -->
 <div class="left">
 <h2>📡 STM32</h2>
 
 <div id="live"></div>
+
 </div>
 
-<!-- METEO -->
+<!-- RIGHT -->
 <div class="right">
 
-<div class="top">
-  <div>
-    <div class="temp" id="temp">--°</div>
-    <div class="desc" id="desc">Chargement...</div>
-  </div>
-  <div id="emoji" style="font-size:60px;"></div>
-</div>
-
-<div class="chart">
-<canvas id="chart" height="80"></canvas>
-</div>
-
-<div class="days" id="days"></div>
+<div id="weather"></div>
 
 </div>
 
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
 
-// STM32
+// ================= LIVE STM32 =================
 async function loadLive(){
-  let r = await fetch('/live');
-  let d = await r.json();
+    const res = await fetch('/live');
+    const d = await res.json();
 
-  if(!d.ok){
-    document.getElementById('live').innerHTML="Erreur STM32";
-    return;
-  }
-
-  document.getElementById('live').innerHTML = `
-    <div class="sensor">
-      Température<br>
-      <div class="big">${d.temp} °C</div>
-    </div>
-
-    <div class="sensor">
-      Pression<br>
-      <div class="big">${d.pres} hPa</div>
-    </div>
-
-    <div class="sensor" style="text-align:center">
-      <div style="font-size:30px">${d.emoji}</div>
-      <b>${d.nom}</b><br>
-      Confiance ${d.conf}%<br>
-      ${d.led}
-    </div>
-  `;
-}
-
-// WEATHER
-async function loadForecast(){
-  let r = await fetch('/forecast');
-  let d = await r.json();
-
-  let temps = [];
-  let labels = [];
-
-  let html="";
-
-  d.days.forEach(day=>{
-    temps.push(day.max);
-    labels.push(day.date.slice(5));
-
-    html += `
-      <div class="day">
-        ${day.date.slice(5)}<br>
-        ☀️<br>
-        ${day.max}°<br>
-        <span style="color:#94a3b8">${day.min}°</span>
-      </div>
-    `;
-  });
-
-  document.getElementById('days').innerHTML = html;
-  document.getElementById('temp').innerHTML = temps[0]+"°";
-  document.getElementById('desc').innerHTML = "Prévision IA";
-  document.getElementById('emoji').innerHTML = "☀️";
-
-  new Chart(document.getElementById('chart'), {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        data: temps,
-        borderColor: '#facc15',
-        backgroundColor: 'rgba(250,204,21,0.2)',
-        fill:true,
-        tension:0.4
-      }]
-    },
-    options:{
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{display:false},
-        y:{display:false}
-      }
+    if(!d.ok){
+        document.getElementById("live").innerHTML="Erreur capteurs";
+        return;
     }
-  });
+
+    document.getElementById("live").innerHTML = `
+    <div class="sensor">
+        <h3>Température</h3>
+        <p>${d.temp} °C</p>
+    </div>
+
+    <div class="sensor">
+        <h3>Pression</h3>
+        <p>${d.pres} hPa</p>
+    </div>
+
+    <div class="sensor">
+        <h3>Accélération</h3>
+        <p>X:${d.acc_x} Y:${d.acc_y} Z:${d.acc_z}</p>
+    </div>
+
+    <div class="sensor">
+        <h3>IA</h3>
+        <p>${d.emoji} ${d.nom}</p>
+        <small>Confiance ${Math.round(d.confiance*100)}%</small>
+    </div>
+    `;
 }
 
+// ================= WEATHER =================
+async function loadWeather(){
+    const res = await fetch('/forecast');
+    const data = await res.json();
+
+    const days = data.days;
+
+    if(!days){
+        document.getElementById("weather").innerHTML="Erreur météo";
+        return;
+    }
+
+    const today = days[0];
+
+    document.getElementById("weather").innerHTML = `
+        <div>
+            <div class="big">${today.temp_max}°</div>
+            <div>${today.nom}</div>
+        </div>
+
+        <div class="days">
+            ${days.map(d=>`
+                <div class="day">
+                    <div>${d.date}</div>
+                    <div>${d.emoji}</div>
+                    <div>${d.temp_max}° / ${d.temp_min}°</div>
+                </div>
+            `).join("")}
+        </div>
+    `;
+}
+
+// INIT
 loadLive();
-loadForecast();
+loadWeather();
 setInterval(loadLive,15000);
 
 </script>
