@@ -27,7 +27,6 @@ TS_CHANNEL_ID = "3349807"
 TS_API_KEY    = "0HUN3VWRIKPZZNRA"
 
 def get_thingspeak():
-    """Lit la dernière mesure des capteurs STM32 depuis ThingSpeak"""
     url = (
         f"https://api.thingspeak.com/channels/{TS_CHANNEL_ID}"
         f"/feeds/last.json?api_key={TS_API_KEY}"
@@ -41,26 +40,22 @@ def get_thingspeak():
         acc_x = float(data.get('field3') or 0)
         acc_y = float(data.get('field4') or 0)
         acc_z = float(data.get('field5') or 0)
-
-        # Magnitude totale de l'accélération
         acc_mag = round((acc_x**2 + acc_y**2 + acc_z**2)**0.5, 2)
 
-        # Prédiction IA (temp + pres + vent=0 + pluie=0)
-        # L'accélération ne rentre pas dans le modèle météo
         X  = np.array([[temp, pres, 0.0, 0.0]])
         Xs = scaler.transform(X)
         proba = model.predict_proba(Xs)[0]
         pred  = int(np.argmax(proba))
 
         return {
-            'ok':        True,
-            'timestamp': data.get('created_at', ''),
-            'temp':      round(temp, 2),
-            'pres':      round(pres, 2),
-            'acc_x':     round(acc_x, 2),
-            'acc_y':     round(acc_y, 2),
-            'acc_z':     round(acc_z, 2),
-            'acc_mag':   acc_mag,
+            'ok':         True,
+            'timestamp':  data.get('created_at', ''),
+            'temp':       round(temp, 2),
+            'pres':       round(pres, 2),
+            'acc_x':      round(acc_x, 2),
+            'acc_y':      round(acc_y, 2),
+            'acc_z':      round(acc_z, 2),
+            'acc_mag':    acc_mag,
             'prediction': pred,
             'nom':        CLASSES[pred],
             'led':        LEDS[pred],
@@ -121,10 +116,10 @@ PAGE = """
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 2rem 1rem; }
-    .container { max-width: 520px; margin: 0 auto; }
+    .container { max-width: 560px; margin: 0 auto; }
     h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.3rem; }
     .sub { color: #94a3b8; font-size: 0.85rem; margin-bottom: 2rem; }
-    .card { background: #1e293b; border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 25px 50px rgba(0,0,0,0.4); }
+    .card { background: #1e293b; border-radius: 16px; padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: 0 25px 50px rgba(0,0,0,0.4); }
     .card-title { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; }
 
     /* ── Capteurs live ── */
@@ -134,19 +129,16 @@ PAGE = """
     .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-right: 5px; animation: pulse 2s infinite; }
     .dot.offline { background: #ef4444; animation: none; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
     .sensors-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; margin-bottom: 1.2rem; }
     .sensor-box { background: #0f172a; border-radius: 10px; padding: 0.9rem; border: 1px solid #334155; }
     .sensor-box.accent { border-color: #6366f166; }
     .s-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; margin-bottom: 0.3rem; }
     .s-value { font-size: 1.3rem; font-weight: 700; color: #818cf8; }
     .s-unit  { font-size: 0.75rem; color: #475569; margin-left: 0.2rem; }
-
     .accel-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 1.2rem; }
     .accel-box { background: #0f172a; border-radius: 8px; padding: 0.7rem; border: 1px solid #1e293b; text-align: center; }
     .a-label { font-size: 0.65rem; color: #64748b; }
     .a-value { font-size: 1rem; font-weight: 700; color: #94a3b8; }
-
     .live-result { border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid #334155; }
     .live-result.bad  { background: #450a0a; border-color: #ef4444; }
     .live-result.mid  { background: #1e1b4b; border-color: #6366f1; }
@@ -160,29 +152,43 @@ PAGE = """
     .led.red   { background: #ef4444; box-shadow: 0 0 12px #ef4444; }
     .led.blue  { background: #6366f1; box-shadow: 0 0 12px #6366f1; }
     .led.green { background: #22c55e; box-shadow: 0 0 12px #22c55e; }
-
+    .ts-time { font-size: 0.7rem; color: #475569; text-align: right; margin-top: 0.6rem; }
     .refresh-btn { background: transparent; border: 1px solid #334155; color: #94a3b8; font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
     .refresh-btn:hover { border-color: #6366f1; color: #818cf8; }
-    .ts-time { font-size: 0.7rem; color: #475569; text-align: right; margin-top: 0.6rem; }
 
-    /* ── Prévisions ── */
-    .forecast-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.2rem; }
-    .city-name { font-size: 1.05rem; font-weight: 700; }
-    .city-sub  { font-size: 0.7rem; color: #475569; margin-top: 0.15rem; }
-    .forecast-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
-    .fcard { background: #0f172a; border-radius: 10px; padding: 0.9rem 0.6rem; text-align: center; border: 1px solid #334155; transition: transform 0.2s; }
-    .fcard:hover { transform: translateY(-2px); }
-    .fcard.today { border-color: #6366f1; }
-    .fday  { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; }
-    .fdate { font-size: 0.62rem; color: #475569; margin-bottom: 0.3rem; }
-    .femoji{ font-size: 1.8rem; margin: 0.3rem 0; }
-    .fnom  { font-size: 0.8rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .ftemp { font-size: 0.72rem; color: #94a3b8; }
-    .fwind { font-size: 0.65rem; color: #64748b; margin-top: 0.2rem; }
-    .fconf { font-size: 0.62rem; color: #475569; margin-top: 0.3rem; }
-    .bad-fc  { border-color: #ef444466 !important; background: #1c0606 !important; }
-    .mid-fc  { border-color: #6366f166 !important; background: #0d0f1e !important; }
-    .good-fc { border-color: #22c55e66 !important; background: #031209 !important; }
+    /* ── Widget météo ── */
+    .weather-widget { background: #1e293b; border-radius: 16px; margin-bottom: 1.5rem; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.4); }
+    .today-header { padding: 1.5rem 2rem 1rem; display: flex; justify-content: space-between; align-items: flex-start; }
+    .today-city { font-size: 1rem; color: #94a3b8; margin-bottom: 0.2rem; }
+    .today-day  { font-size: 0.8rem; color: #64748b; }
+    .today-temp { font-size: 4rem; font-weight: 300; line-height: 1; }
+    .today-temp sup { font-size: 1.5rem; vertical-align: super; }
+    .today-desc { font-size: 0.9rem; color: #94a3b8; margin-top: 0.4rem; }
+    .today-details { font-size: 0.78rem; color: #64748b; margin-top: 0.3rem; line-height: 1.7; }
+    .today-right { text-align: right; }
+    .today-emoji { font-size: 4rem; }
+    .today-led-row { display: flex; gap: 6px; justify-content: flex-end; margin-top: 0.5rem; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #334155; padding: 0 2rem; }
+    .tab { font-size: 0.82rem; padding: 0.5rem 1rem 0.4rem; cursor: pointer; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab.active { color: #f59e0b; border-bottom-color: #f59e0b; }
+    .chart-area { padding: 1rem 1.5rem 0.5rem; }
+    .chart-svg { width: 100%; overflow: visible; }
+    .days-row { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #334155; }
+    .day-cell { padding: 0.9rem 0.5rem; text-align: center; border-right: 1px solid #1e293b; cursor: pointer; transition: background 0.2s; }
+    .day-cell:last-child { border-right: none; }
+    .day-cell:hover { background: #ffffff08; }
+    .day-cell.active-day { background: #ffffff0d; }
+    .day-name  { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 0.3rem; }
+    .day-emoji { font-size: 1.6rem; margin: 0.2rem 0; }
+    .day-temps { font-size: 0.8rem; }
+    .day-max   { color: #e2e8f0; font-weight: 600; }
+    .day-min   { color: #64748b; margin-left: 0.3rem; }
+    .day-badge { display: inline-block; font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 4px; margin-top: 0.3rem; }
+    .badge-bad  { background: #ef444422; color: #ef4444; }
+    .badge-mid  { background: #6366f122; color: #818cf8; }
+    .badge-good { background: #22c55e22; color: #22c55e; }
+    .widget-footer { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 2rem; border-top: 1px solid #1e293b; }
+    .widget-source { font-size: 0.68rem; color: #475569; }
 
     /* ── Simulation manuelle ── */
     label { display: block; font-size: 0.85rem; color: #94a3b8; margin-top: 1.1rem; margin-bottom: 0.3rem; }
@@ -212,55 +218,35 @@ PAGE = """
   <div class="card">
     <div class="live-header">
       <div>
-        <div class="live-title">
-          <span class="dot" id="dot"></span>Capteurs STM32 Live
-        </div>
+        <div class="live-title"><span class="dot" id="dot"></span>Capteurs STM32 Live</div>
         <div class="live-status" id="liveStatus">Connexion ThingSpeak...</div>
       </div>
       <button class="refresh-btn" onclick="loadLive()">🔄 Rafraîchir</button>
     </div>
-
-    <div id="liveContent">
-      <div class="loading">⏳ Lecture des capteurs...</div>
-    </div>
+    <div id="liveContent"><div class="loading">⏳ Lecture des capteurs...</div></div>
   </div>
 
-  <!-- ── PRÉVISIONS 3 JOURS ── -->
-  <div class="card">
-    <div class="forecast-header">
-      <div>
-        <div class="city-name">📍 Le Bourget-du-Lac, FR</div>
-        <div class="city-sub">Lac du Bourget · Savoie (73)</div>
-      </div>
-      <button class="refresh-btn" onclick="loadForecast()">🔄 Actualiser</button>
-    </div>
-    <div id="forecast">
-      <div class="loading">⏳ Chargement des prévisions...</div>
-    </div>
+  <!-- ── WIDGET MÉTÉO ── -->
+  <div class="weather-widget" id="weatherWidget">
+    <div class="loading" style="padding:3rem">⏳ Chargement météo...</div>
   </div>
 
   <!-- ── SIMULATION MANUELLE ── -->
   <div class="card">
     <div class="card-title">🎛️ Simulation manuelle capteurs</div>
-
     <label>🌡️ Température <span class="val" id="vTemp">20°C</span></label>
     <input type="range" id="temp" min="-10" max="45" value="20"
            oninput="document.getElementById('vTemp').textContent=this.value+'°C'">
-
     <label>🔵 Pression <span class="val" id="vPres">1013 hPa</span></label>
     <input type="range" id="pres" min="970" max="1050" value="1013"
            oninput="document.getElementById('vPres').textContent=this.value+' hPa'">
-
     <label>💨 Vent estimé <span class="val" id="vWind">10 km/h</span></label>
     <input type="range" id="wind" min="0" max="80" value="10"
            oninput="document.getElementById('vWind').textContent=this.value+' km/h'">
-
     <label>🌧️ Précipitations <span class="val" id="vRain">0 mm</span></label>
     <input type="range" id="rain" min="0" max="30" value="0"
            oninput="document.getElementById('vRain').textContent=this.value+' mm'">
-
     <button class="predict-btn" onclick="predict()">⚡ Prédire le temps</button>
-
     <div class="result" id="result">
       <div class="remoji" id="rEmoji"></div>
       <div class="rlabel" id="rLabel"></div>
@@ -272,7 +258,6 @@ PAGE = """
       </div>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -281,22 +266,13 @@ async function loadLive() {
   try {
     const res  = await fetch('/live?_t=' + Date.now());
     const data = await res.json();
-
     if (!data.ok) throw new Error(data.error || 'Erreur ThingSpeak');
-
-    // Statut connecté
     document.getElementById('dot').classList.remove('offline');
-    document.getElementById('liveStatus').textContent =
-      'Connecté · mise à jour automatique toutes les 15s';
-
-    const themes = {0: 'bad', 1: 'mid', 2: 'good'};
-
-    // Formater l'heure
+    document.getElementById('liveStatus').textContent = 'Connecté · auto-refresh 15s';
+    const themes = {0:'bad', 1:'mid', 2:'good'};
     const d = new Date(data.timestamp);
     const timeStr = isNaN(d) ? data.timestamp :
-      d.toLocaleString('fr-FR', {day:'2-digit', month:'short',
-                                  hour:'2-digit', minute:'2-digit'});
-
+      d.toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
     document.getElementById('liveContent').innerHTML = `
       <div class="sensors-grid">
         <div class="sensor-box accent">
@@ -308,94 +284,177 @@ async function loadLive() {
           <div class="s-value">${data.pres}<span class="s-unit">hPa</span></div>
         </div>
       </div>
-
       <div class="s-label" style="margin-bottom:0.5rem">📐 Accélération (mg)</div>
       <div class="accel-row">
-        <div class="accel-box">
-          <div class="a-label">X</div>
-          <div class="a-value">${data.acc_x}</div>
-        </div>
-        <div class="accel-box">
-          <div class="a-label">Y</div>
-          <div class="a-value">${data.acc_y}</div>
-        </div>
-        <div class="accel-box">
-          <div class="a-label">Z</div>
-          <div class="a-value">${data.acc_z}</div>
-        </div>
+        <div class="accel-box"><div class="a-label">X</div><div class="a-value">${data.acc_x}</div></div>
+        <div class="accel-box"><div class="a-label">Y</div><div class="a-value">${data.acc_y}</div></div>
+        <div class="accel-box"><div class="a-label">Z</div><div class="a-value">${data.acc_z}</div></div>
       </div>
-
       <div class="live-result ${themes[data.prediction]}">
         <div class="lr-emoji">${data.emoji}</div>
         <div class="lr-label">${data.nom} — ${data.led}</div>
-        <div class="lr-conf">Confiance : ${Math.round(data.confiance * 100)}%</div>
+        <div class="lr-conf">Confiance : ${Math.round(data.confiance*100)}%</div>
         <div class="led-row">
-          <div class="led red  ${data.prediction === 0 ? 'on' : ''}"></div>
-          <div class="led blue ${data.prediction === 1 ? 'on' : ''}"></div>
-          <div class="led green${data.prediction === 2 ? 'on' : ''}"></div>
+          <div class="led red   ${data.prediction===0?'on':''}"></div>
+          <div class="led blue  ${data.prediction===1?'on':''}"></div>
+          <div class="led green ${data.prediction===2?'on':''}"></div>
         </div>
       </div>
-      <div class="ts-time">📡 Dernière mesure : ${timeStr}</div>
-    `;
-
+      <div class="ts-time">📡 Dernière mesure : ${timeStr}</div>`;
   } catch(e) {
     document.getElementById('dot').classList.add('offline');
     document.getElementById('liveStatus').textContent = 'Hors ligne';
     document.getElementById('liveContent').innerHTML =
-      `<div class="error-msg">❌ ${e.message}<br>
-       <small>Vérifie que la STM32 envoie des données sur ThingSpeak</small></div>`;
+      `<div class="error-msg">❌ ${e.message}<br><small>Vérifie que la STM32 envoie des données</small></div>`;
   }
 }
-
-// Rafraîchissement automatique toutes les 15 secondes
 setInterval(loadLive, 15000);
 
-// ── Prévisions ───────────────────────────────────────────────
+// ── Widget météo ─────────────────────────────────────────────
+let forecastData = [];
+
+function drawChart(days, mode) {
+  const W = 500, H = 80;
+  const n = days.length;
+  let values, color, unit;
+  if (mode === 'temp') {
+    values = days.map(d => (d.temp_max + d.temp_min) / 2);
+    color = '#f59e0b'; unit = '°';
+  } else if (mode === 'prcp') {
+    values = days.map(d => d.prcp);
+    color = '#6366f1'; unit = 'mm';
+  } else {
+    values = days.map(d => d.wspd);
+    color = '#22c55e'; unit = 'km/h';
+  }
+  const minV = Math.min(...values) - 2;
+  const maxV = Math.max(...values) + 2;
+  const xs = days.map((_, i) => 40 + i * ((W - 80) / (n - 1)));
+  const ys = values.map(v => H - 10 - ((v - minV) / (maxV - minV)) * (H - 20));
+  let path = `M ${xs[0]} ${ys[0]}`;
+  for (let i = 1; i < n; i++) {
+    const mx = (xs[i-1] + xs[i]) / 2;
+    path += ` C ${mx} ${ys[i-1]}, ${mx} ${ys[i]}, ${xs[i]} ${ys[i]}`;
+  }
+  let fill = path + ` L ${xs[n-1]} ${H} L ${xs[0]} ${H} Z`;
+  let labels = '';
+  xs.forEach((x, i) => {
+    labels += `<text x="${x}" y="${ys[i]-8}" text-anchor="middle"
+      fill="${color}" font-size="11" font-weight="600">${values[i].toFixed(1)}${unit}</text>`;
+    labels += `<circle cx="${x}" cy="${ys[i]}" r="4" fill="${color}"/>`;
+  });
+  return `
+    <svg class="chart-svg" viewBox="0 0 ${W} ${H+10}" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="${fill}" fill="url(#grad)"/>
+      <path d="${path}" fill="none" stroke="${color}" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      ${labels}
+    </svg>`;
+}
+
+function renderWidget(days, activeTab) {
+  const today = days[0];
+  const dayNames = ["Dim.","Lun.","Mar.","Mer.","Jeu.","Ven.","Sam."];
+  const badgeClass = {0:'badge-bad', 1:'badge-mid', 2:'badge-good'};
+  const badgeLabel = {0:'Mauvais', 1:'Moyen', 2:'Bon'};
+  const ledColors  = {0:'#ef4444', 1:'#6366f1', 2:'#22c55e'};
+  const now = new Date();
+  const dayStr = now.toLocaleDateString('fr-FR',
+    {weekday:'long', day:'numeric', month:'long'});
+  const todayLeds = [0,1,2].map(i =>
+    `<div style="width:10px;height:10px;border-radius:50%;
+      background:${ledColors[i]};
+      opacity:${today.prediction===i?1:0.15};
+      box-shadow:${today.prediction===i?`0 0 8px ${ledColors[i]}`:'none'}"></div>`
+  ).join('');
+  const daysHTML = days.map((d, i) => {
+    const dateObj = new Date(d.date + 'T12:00:00');
+    const dayName = dayNames[dateObj.getDay()];
+    return `
+      <div class="day-cell ${i===0?'active-day':''}" onclick="switchDay(${i})">
+        <div class="day-name">${i===0?'Auj.':dayName}</div>
+        <div class="day-emoji">${d.emoji}</div>
+        <div class="day-temps">
+          <span class="day-max">${d.temp_max}°</span>
+          <span class="day-min">${d.temp_min}°</span>
+        </div>
+        <div><span class="day-badge ${badgeClass[d.prediction]}">${badgeLabel[d.prediction]}</span></div>
+      </div>`;
+  }).join('');
+  const chart = drawChart(days, activeTab);
+  document.getElementById('weatherWidget').innerHTML = `
+    <div class="today-header">
+      <div class="today-left">
+        <div class="today-city">📍 Le Bourget-du-Lac, FR</div>
+        <div class="today-day">${dayStr}</div>
+        <div class="today-temp">${today.temp_max}<sup>°C</sup></div>
+        <div class="today-desc">${today.nom}</div>
+        <div class="today-details">
+          💨 Vent : ${today.wspd} km/h<br>
+          🌧️ Précip. : ${today.prcp} mm<br>
+          🔵 Pression : ${today.pres} hPa
+        </div>
+      </div>
+      <div class="today-right">
+        <div class="today-emoji">${today.emoji}</div>
+        <div class="today-led-row">${todayLeds}</div>
+        <div style="font-size:0.7rem;color:#475569;margin-top:0.3rem">
+          Confiance ${Math.round(today.confiance*100)}%
+        </div>
+        <button class="refresh-btn" style="margin-top:0.8rem" onclick="loadForecast()">🔄</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab ${activeTab==='temp'?'active':''}"  onclick="switchTab('temp')">Température</div>
+      <div class="tab ${activeTab==='prcp'?'active':''}"  onclick="switchTab('prcp')">Précipitations</div>
+      <div class="tab ${activeTab==='wind'?'active':''}"  onclick="switchTab('wind')">Vent</div>
+    </div>
+    <div class="chart-area">${chart}</div>
+    <div class="days-row">${daysHTML}</div>
+    <div class="widget-footer">
+      <span class="widget-source">IA entraînée sur données réelles 2018-2023</span>
+      <span class="widget-source">Open-Meteo · Scikit-learn</span>
+    </div>`;
+}
+
+function switchTab(tab) {
+  if (forecastData.length) renderWidget(forecastData, tab);
+}
+
+function switchDay(i) {
+  document.querySelectorAll('.day-cell').forEach((el, j) => {
+    el.classList.toggle('active-day', i === j);
+  });
+}
+
 async function loadForecast() {
-  document.getElementById('forecast').innerHTML =
-    '<div class="loading">⏳ Chargement...</div>';
+  document.getElementById('weatherWidget').innerHTML =
+    '<div class="loading" style="padding:3rem">⏳ Chargement météo...</div>';
   try {
     const res  = await fetch('/forecast?_t=' + Date.now());
     const json = await res.json();
     if (json.error) throw new Error(json.error);
-
-    const days   = json.days;
-    const labels = ["Aujourd'hui", 'Demain', 'Après-demain'];
-    const themes = {0: 'bad-fc', 1: 'mid-fc', 2: 'good-fc'};
-    let html = '<div class="forecast-grid">';
-    days.forEach((d, i) => {
-      const todayClass = i === 0 ? 'today' : '';
-      const dateObj = new Date(d.date + 'T12:00:00');
-      const dateStr = dateObj.toLocaleDateString('fr-FR',
-        {weekday:'short', day:'numeric', month:'short'});
-      html += `
-        <div class="fcard ${todayClass} ${themes[d.prediction]}">
-          <div class="fday">${labels[i]}</div>
-          <div class="fdate">${dateStr}</div>
-          <div class="femoji">${d.emoji}</div>
-          <div class="fnom">${d.nom}</div>
-          <div class="ftemp">🌡️ ${d.temp_min}° / ${d.temp_max}°C</div>
-          <div class="fwind">💨 ${d.wspd} km/h · 🌧️ ${d.prcp} mm</div>
-          <div class="fconf">Confiance ${Math.round(d.confiance * 100)}%</div>
-        </div>`;
-    });
-    html += '</div>';
-    document.getElementById('forecast').innerHTML = html;
+    forecastData = json.days;
+    renderWidget(forecastData, 'temp');
   } catch(e) {
-    document.getElementById('forecast').innerHTML =
-      `<div class="error-msg">❌ ${e.message}</div>`;
+    document.getElementById('weatherWidget').innerHTML =
+      `<div class="error-msg" style="padding:2rem">❌ ${e.message}</div>`;
   }
 }
 
 // ── Simulation manuelle ──────────────────────────────────────
 async function predict() {
   const btn = document.querySelector('.predict-btn');
-  btn.textContent = '⏳ Analyse...';
-  btn.disabled = true;
+  btn.textContent = '⏳ Analyse...'; btn.disabled = true;
   try {
-    const res  = await fetch('/predict', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+    const res = await fetch('/predict', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         temp: document.getElementById('temp').value,
         pres: document.getElementById('pres').value,
@@ -404,19 +463,17 @@ async function predict() {
       })
     });
     const data = await res.json();
-    const themes = {0: 'bad', 1: 'mid', 2: 'good'};
+    const themes = {0:'bad', 1:'mid', 2:'good'};
     document.getElementById('rEmoji').textContent = data.emoji;
     document.getElementById('rLabel').textContent = data.nom + ' — ' + data.led;
-    document.getElementById('rConf').textContent  =
-      'Confiance : ' + Math.round(data.confiance * 100) + '%';
+    document.getElementById('rConf').textContent  = 'Confiance : ' + Math.round(data.confiance*100) + '%';
     const r = document.getElementById('result');
     r.className = 'result show ' + themes[data.prediction];
-    document.getElementById('ledR').classList.toggle('on', data.prediction === 0);
-    document.getElementById('ledB').classList.toggle('on', data.prediction === 1);
-    document.getElementById('ledG').classList.toggle('on', data.prediction === 2);
+    document.getElementById('ledR').classList.toggle('on', data.prediction===0);
+    document.getElementById('ledB').classList.toggle('on', data.prediction===1);
+    document.getElementById('ledG').classList.toggle('on', data.prediction===2);
   } catch(e) { alert('Erreur : ' + e.message); }
-  btn.textContent = '⚡ Prédire le temps';
-  btn.disabled = false;
+  btn.textContent = '⚡ Prédire le temps'; btn.disabled = false;
 }
 
 // Démarrage
